@@ -1,0 +1,172 @@
+use std::collections::HashMap;
+
+use futures_util::{
+    stream::{SplitSink, SplitStream, StreamExt},
+    SinkExt,
+};
+
+use tokio::{net::TcpStream, sync::mpsc};
+use tokio_tungstenite::WebSocketStream;
+use tungstenite::Message;
+
+use crate::{
+    dispatch::DispatchHandle,
+    message::{
+        chat::{ConnMessage, RoomMessage},
+        protocol::{self, ClientProtocol},
+    },
+    session::{
+        room::RoomHandle,
+        session::{Identity, RoomId},
+    },
+};
+
+/// wrapper websocket connection (actor)
+pub struct Conn {
+    id: Identity,
+
+    /// write is a websocket stream. it can send message to client.
+    write: SplitSink<WebSocketStream<TcpStream>, Message>,
+
+    /// read is a websocket stream. it can receive message from client.
+    read: SplitStream<WebSocketStream<TcpStream>>,
+
+    /// receiver_from_room is a channel. it can receive message from room.
+    receiver: mpsc::Receiver<RoomMessage>,
+
+    dispatch_handle: DispatchHandle,
+}
+
+impl Conn {
+    pub fn new(
+        id: Identity,
+        stream: WebSocketStream<TcpStream>,
+        receiver: mpsc::Receiver<RoomMessage>,
+        dispatch_handle: DispatchHandle,
+    ) -> Self {
+        let (write, read) = stream.split();
+
+        Conn {
+            id,
+            write,
+            read,
+            receiver,
+            dispatch_handle,
+        }
+    }
+
+    /// on message received from room.
+    /// froward these message to client.
+    async fn handle_room_message(&mut self, message: RoomMessage) {
+        match message {
+            RoomMessage::OnJoin { room_id, member } => {
+                if member == self.id {
+                    let _ = self
+                        .write
+                        .send(ClientProtocol::self_join(room_id).to_message())
+                        .await;
+
+                    return;
+                }
+
+                let _ = self
+                    .write
+                    .send(ClientProtocol::join(member, room_id).to_message())
+                    .await;
+            }
+            RoomMessage::OnLeave { room_id, member } => todo!(),
+            RoomMessage::OnNewMessage {
+                room_id,
+                member,
+                content,
+            } => {
+                if let Err(err) = self.write.send(content).await {
+                    println!("send message to client err: {:?}", err);
+                }
+            }
+        }
+    }
+
+    /// on message received from client.
+    /// forward these message to dispatc.
+    async fn handle_client_message(&mut self, message: Message) {
+        match message {
+            Message::Text(msg) => {
+                let msg: ClientProtocol = match serde_json::from_str(&msg) {
+                    Ok(ret) => ret,
+                    Err(err) => {
+                        println!("parse message error: {:?}", err);
+                        return;
+                    }
+                };
+
+                self.dispatch_handle
+                    .send_conn_message(ConnMessage::OnNewMessage {
+                        member: self.id.clone(),
+                        message: msg,
+                    })
+                    .await;
+            }
+            Message::Close(_) => {
+                let room_msg = ConnMessage::OnLeave {
+                    member: self.id.clone(),
+                };
+
+                self.dispatch_handle.send_conn_message(room_msg).await
+            }
+            _ => todo!(),
+        }
+    }
+}
+
+async fn listener(mut conn: Conn) {
+    loop {
+        tokio::select! {
+            Some(msg) = conn.receiver.recv() => {
+                conn.handle_room_message(msg).await;
+            }
+            Some(msg) = conn.read.next() => {
+                match msg {
+                    Ok(msg) => {
+                        conn.handle_client_message(msg).await;
+                    }
+                    Err(err) => {
+                        println!("receive message from client err: {:?}", err);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ConnHandle {
+    id: Identity,
+    tx: mpsc::Sender<RoomMessage>,
+}
+
+impl ConnHandle {
+    pub fn new(
+        id: Identity,
+        stream: WebSocketStream<TcpStream>,
+        dispatch_handle: DispatchHandle,
+    ) -> Self {
+        let (tx, rx) = mpsc::channel(100);
+
+        let conn = Conn::new(id.clone(), stream, rx, dispatch_handle);
+
+        tokio::spawn(listener(conn));
+
+        ConnHandle { id, tx }
+    }
+
+    pub fn identity(&self) -> &Identity {
+        &self.id
+    }
+
+    pub async fn send_message(&self, message: RoomMessage) {
+        if let Err(err) = self.tx.send(message).await {
+            println!("send message error: {:?}", err);
+        }
+    }
+}
