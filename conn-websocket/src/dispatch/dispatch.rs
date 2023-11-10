@@ -3,9 +3,9 @@ use std::{collections::HashMap, time::Duration};
 use tokio::sync::mpsc;
 
 use crate::{
-    conn::ConnHandle,
+    auth::RoomId,
     message::chat::{ConnMessage, DispatchMessage, SessionMessage},
-    session::{room::RoomHandle, session::RoomId},
+    session::{conn::ConnHandle, room::RoomHandle},
 };
 
 use super::collection::Cursor;
@@ -68,7 +68,7 @@ impl Manager {
                 let room_id = message.room_id();
                 if let Some(room_handle) = self.rooms.get(room_id) {
                     let dispatch_message = DispatchMessage::OnNewMessage { member, message };
-                    room_handle.on_new_message(dispatch_message).await;
+                    room_handle.new_message(dispatch_message).await;
                 }
             }
         }
@@ -81,7 +81,7 @@ impl Manager {
         let room_handle = RoomHandle::new(room_id.clone());
         self.rooms.insert(room_id, room_handle.clone());
 
-        room_handle.on_join(vec![c, cs]).await;
+        room_handle.join(vec![c, cs]).await;
     }
 
     /// dispatch customer to customer service.
@@ -131,6 +131,7 @@ impl Manager {
             return;
         }
 
+        // try dispatch customer to customer service.
         self.dispatch(conn).await;
     }
 }

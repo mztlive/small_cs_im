@@ -3,16 +3,16 @@ use std::collections::HashMap;
 use tokio::sync::mpsc;
 
 use crate::{
-    conn,
+    auth::{Member, RoomId},
     message::chat::{DispatchMessage, RoomMessage},
 };
 
-use super::session::{Identity, RoomId};
+use super::conn::ConnHandle;
 
 pub struct ChatRoom {
     id: RoomId,
 
-    members: HashMap<Identity, conn::ConnHandle>,
+    members: HashMap<Member, ConnHandle>,
 
     manager_receiver: mpsc::Receiver<DispatchMessage>,
 }
@@ -28,7 +28,7 @@ impl ChatRoom {
     }
 
     /// send message to all conn.
-    async fn broadcast(&mut self, msg: RoomMessage, filter: Vec<Identity>) {
+    async fn broadcast(&mut self, msg: RoomMessage, filter: Vec<Member>) {
         for (id, conn_handle) in self.members.iter() {
             if filter.contains(id) {
                 continue;
@@ -39,7 +39,7 @@ impl ChatRoom {
     }
 
     /// send from_member message to all conn. except from_member.
-    async fn broadcast_join(&mut self, from_member: Identity) {
+    async fn broadcast_join(&mut self, from_member: Member) {
         let chat_message = RoomMessage::OnJoin {
             room_id: self.id.clone(),
             member: from_member.clone(),
@@ -120,7 +120,7 @@ impl RoomHandle {
     }
 
     /// send on join message to room.
-    pub async fn on_join(&self, conn_handle: Vec<conn::ConnHandle>) {
+    pub async fn join(&self, conn_handle: Vec<ConnHandle>) {
         for conn_handle in conn_handle {
             let message = DispatchMessage::OnJoin {
                 conn_handle: conn_handle.clone(),
@@ -130,7 +130,7 @@ impl RoomHandle {
     }
 
     /// send on new message to room.
-    pub async fn on_new_message(&self, message: DispatchMessage) {
+    pub async fn new_message(&self, message: DispatchMessage) {
         self.send_message(message).await;
     }
 

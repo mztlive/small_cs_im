@@ -10,20 +10,17 @@ use tokio_tungstenite::WebSocketStream;
 use tungstenite::Message;
 
 use crate::{
+    auth::Member,
     dispatch::DispatchHandle,
     message::{
         chat::{ConnMessage, RoomMessage},
         protocol::{self, ClientProtocol},
     },
-    session::{
-        room::RoomHandle,
-        session::{Identity, RoomId},
-    },
 };
 
 /// wrapper websocket connection (actor)
 pub struct Conn {
-    id: Identity,
+    id: Member,
 
     /// write is a websocket stream. it can send message to client.
     write: SplitSink<WebSocketStream<TcpStream>, Message>,
@@ -39,7 +36,7 @@ pub struct Conn {
 
 impl Conn {
     pub fn new(
-        id: Identity,
+        id: Member,
         stream: WebSocketStream<TcpStream>,
         receiver: mpsc::Receiver<RoomMessage>,
         dispatch_handle: DispatchHandle,
@@ -141,13 +138,13 @@ async fn listener(mut conn: Conn) {
 
 #[derive(Debug, Clone)]
 pub struct ConnHandle {
-    id: Identity,
+    id: Member,
     tx: mpsc::Sender<RoomMessage>,
 }
 
 impl ConnHandle {
     pub fn new(
-        id: Identity,
+        id: Member,
         stream: WebSocketStream<TcpStream>,
         dispatch_handle: DispatchHandle,
     ) -> Self {
@@ -160,7 +157,7 @@ impl ConnHandle {
         ConnHandle { id, tx }
     }
 
-    pub fn identity(&self) -> &Identity {
+    pub fn identity(&self) -> &Member {
         &self.id
     }
 

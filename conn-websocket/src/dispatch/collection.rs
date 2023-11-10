@@ -1,5 +1,3 @@
-use crate::conn::ConnHandle;
-
 pub struct Cursor<T> {
     items: Vec<T>,
     cursor: usize,

@@ -1,5 +1,4 @@
 pub mod auth;
-pub mod conn;
 pub mod dispatch;
 pub mod message;
 pub mod session;
@@ -11,7 +10,7 @@ use tokio::{
     sync::{mpsc, Mutex},
 };
 
-use crate::{message::chat::SessionMessage, session::session::Identity};
+use crate::{message::chat::SessionMessage, session::conn::ConnHandle};
 
 #[tokio::main]
 async fn main() {
@@ -33,9 +32,8 @@ async fn main() {
                 }
             };
 
-            let identity = Identity::new(conn_wrapper.user_type, conn_wrapper.identity);
             let conn_handle =
-                conn::ConnHandle::new(identity.clone(), conn_wrapper.stream, handle.clone());
+                ConnHandle::new(conn_wrapper.member, conn_wrapper.stream, handle.clone());
 
             let message = SessionMessage::OnAccept { conn: conn_handle };
 

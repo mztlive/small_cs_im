@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tungstenite::Message;
 
-use crate::session::session::{Identity, RoomId};
+use crate::auth::{Member, RoomId};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum MessageType {
@@ -26,7 +26,7 @@ impl ClientProtocol {
         }
     }
 
-    pub fn join(id: Identity, room_id: RoomId) -> Self {
+    pub fn join(id: Member, room_id: RoomId) -> Self {
         let msg = format!("{} 加入了聊天", id.identity());
         ClientProtocol::new_tips(msg, room_id)
     }

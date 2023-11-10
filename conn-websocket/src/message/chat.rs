@@ -1,16 +1,9 @@
-use tokio::{
-    net::TcpStream,
-    sync::{mpsc, oneshot},
-};
-use tokio_tungstenite::WebSocketStream;
+use tokio::sync::oneshot;
 use tungstenite::Message;
 
 use crate::{
-    conn::ConnHandle,
-    session::{
-        room::RoomHandle,
-        session::{Identity, RoomId},
-    },
+    auth::{Member, RoomId},
+    session::conn::ConnHandle,
 };
 
 use super::protocol::ClientProtocol;
@@ -18,10 +11,10 @@ use super::protocol::ClientProtocol;
 #[derive(Debug, Clone)]
 pub enum ConnMessage {
     OnLeave {
-        member: Identity,
+        member: Member,
     },
     OnNewMessage {
-        member: Identity,
+        member: Member,
         message: ClientProtocol,
     },
 }
@@ -30,15 +23,15 @@ pub enum ConnMessage {
 pub enum RoomMessage {
     OnJoin {
         room_id: RoomId,
-        member: Identity,
+        member: Member,
     },
     OnLeave {
         room_id: RoomId,
-        member: Identity,
+        member: Member,
     },
     OnNewMessage {
         room_id: RoomId,
-        member: Identity,
+        member: Member,
         content: Message,
     },
 }
@@ -48,7 +41,7 @@ pub enum DispatchMessage {
         conn_handle: ConnHandle,
     },
     OnNewMessage {
-        member: Identity,
+        member: Member,
         message: ClientProtocol,
     },
     GetMemberCount {
