@@ -3,12 +3,7 @@ pub mod dispatch;
 pub mod message;
 pub mod session;
 
-use std::sync::Arc;
-
-use tokio::{
-    net::{TcpListener, TcpStream},
-    sync::{mpsc, Mutex},
-};
+use tokio::net::TcpListener;
 
 use crate::{message::chat::SessionMessage, session::conn::ConnHandle};
 
@@ -24,7 +19,7 @@ async fn main() {
         let handle = dispatch_handle.clone();
 
         tokio::spawn(async move {
-            let conn_wrapper = match auth::handshake::handle(stream).await {
+            let conn_wrapper = match auth::handshake(stream).await {
                 Ok(conn_wrapper) => conn_wrapper,
                 Err(err) => {
                     println!("handshake error: {:?}", err);

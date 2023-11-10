@@ -15,7 +15,7 @@ pub struct ConnWrapper {
     pub member: Member,
 }
 
-pub async fn handle(stream: TcpStream) -> Result<ConnWrapper, ErrorResponse> {
+pub async fn handshake(stream: TcpStream) -> Result<ConnWrapper, ErrorResponse> {
     let mut user_id = String::new();
     let mut user_type = UserType::Customer;
     let mut user_name = String::new();
