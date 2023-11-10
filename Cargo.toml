@@ -1,5 +1,2 @@
 [workspace]
-members = [
-    "ha",
-    "conn-websocket"
-]
+members = ["ha", "im"]

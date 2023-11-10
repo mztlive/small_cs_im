@@ -1,18 +1,6 @@
 {
     "rust-analyzer.linkedProjects": [
-        "./conn-websocket/Cargo.toml",
-        "./conn-websocket/Cargo.toml",
-        "./conn-websocket/Cargo.toml",
-        "./conn-websocket/Cargo.toml",
-        "./conn-websocket/Cargo.toml",
-        "./conn-websocket/Cargo.toml",
-        "./conn-websocket/Cargo.toml",
-        "./conn-websocket/Cargo.toml",
-        "./conn-websocket/Cargo.toml",
-        "./conn-websocket/Cargo.toml",
-        "./conn-websocket/Cargo.toml",
-        "./conn-websocket/Cargo.toml",
-        "./conn-websocket/Cargo.toml",
-        "./conn-websocket/Cargo.toml"
+        "./im/Cargo.toml",
+        "./ha/Cargo.toml",
     ]
 }
