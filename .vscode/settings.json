@@ -11,6 +11,8 @@
         "./conn-websocket/Cargo.toml",
         "./conn-websocket/Cargo.toml",
         "./conn-websocket/Cargo.toml",
+        "./conn-websocket/Cargo.toml",
+        "./conn-websocket/Cargo.toml",
         "./conn-websocket/Cargo.toml"
     ]
 }
