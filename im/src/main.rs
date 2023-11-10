@@ -5,7 +5,7 @@ pub mod session;
 
 use tokio::net::TcpListener;
 
-use crate::{message::chat::SessionMessage, session::conn::ConnHandle};
+use crate::{message::internal::SessionMessage, session::conn::ConnHandle};
 
 #[tokio::main]
 async fn main() {

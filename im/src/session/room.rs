@@ -4,7 +4,7 @@ use tokio::sync::mpsc;
 
 use crate::{
     auth::{Member, RoomId},
-    message::chat::{DispatchMessage, RoomMessage},
+    message::internal::{DispatchMessage, RoomMessage},
 };
 
 use super::conn::ConnHandle;

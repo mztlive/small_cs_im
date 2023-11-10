@@ -13,7 +13,7 @@ use crate::{
     auth::Member,
     dispatch::DispatchHandle,
     message::{
-        chat::{ConnMessage, RoomMessage},
+        internal::{ConnMessage, RoomMessage},
         protocol::{self, ClientProtocol},
     },
 };
@@ -60,7 +60,7 @@ impl Conn {
                 if member == self.id {
                     let _ = self
                         .write
-                        .send(ClientProtocol::self_join(room_id).to_message())
+                        .send(protocol::self_join(room_id).to_message())
                         .await;
 
                     return;
@@ -68,7 +68,7 @@ impl Conn {
 
                 let _ = self
                     .write
-                    .send(ClientProtocol::join(member, room_id).to_message())
+                    .send(protocol::join(member, room_id).to_message())
                     .await;
             }
             RoomMessage::OnLeave { room_id, member } => todo!(),
