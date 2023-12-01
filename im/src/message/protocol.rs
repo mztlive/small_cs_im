@@ -49,7 +49,7 @@ impl ClientProtocol {
 }
 
 pub fn join(id: Member, room_id: RoomId) -> ClientProtocol {
-    let msg = format!("{} 加入了聊天", id.identity());
+    let msg = format!("{} 加入了聊天", id.id());
     ClientProtocol::new_tips(msg, room_id)
 }
 

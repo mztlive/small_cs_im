@@ -1,4 +1,7 @@
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::{HashMap, VecDeque},
+    time::Duration,
+};
 
 use tokio::sync::mpsc;
 
@@ -19,38 +22,32 @@ pub struct Manager {
     /// customer service list
     customer_services: Cursor<ConnHandle>,
 
-    /// receiver from session
-    receiver_from_session: mpsc::Receiver<SessionMessage>,
+    /// waiting queue.  no dispatch conns
+    waiting_queue: VecDeque<ConnHandle>,
 
-    /// receiver from conn
-    receiver_from_conn: mpsc::Receiver<ConnMessage>,
+    /// receive message from session
+    mailbox_session: mpsc::Receiver<SessionMessage>,
 
-    /// waiting queue.  store not dispatch customer service of conn.
-    waiting_queue: mpsc::Receiver<ConnHandle>,
-
-    /// send_to_waiting_queue
-    sender_waiting_queue: mpsc::Sender<ConnHandle>,
+    /// receive message from conn
+    mailbox_conn: mpsc::Receiver<ConnMessage>,
 }
 
 impl Manager {
     pub fn new(
-        receiver_from_session: mpsc::Receiver<SessionMessage>,
-        receiver_from_conn: mpsc::Receiver<ConnMessage>,
+        mailbox_session: mpsc::Receiver<SessionMessage>,
+        mailbox_conn: mpsc::Receiver<ConnMessage>,
     ) -> Self {
-        let (sender_waiting_queue, waiting_queue) = mpsc::channel(MAX_WAITING_QUEUE_SIZE);
-
         Manager {
             rooms: HashMap::new(),
             customer_services: Cursor::new(Vec::new()),
-            receiver_from_session,
-            receiver_from_conn,
-            waiting_queue,
-            sender_waiting_queue,
+            mailbox_session,
+            mailbox_conn,
+            waiting_queue: VecDeque::new(),
         }
     }
 
     /// handle received message from session.
-    async fn handle_message(&mut self, msg: SessionMessage) {
+    async fn handle_session_message(&mut self, msg: SessionMessage) {
         match msg {
             SessionMessage::OnAccept { conn } => {
                 self.add_session(conn).await;
@@ -76,7 +73,7 @@ impl Manager {
 
     /// create room and add conn to room.
     async fn create_room(&mut self, c: ConnHandle, cs: ConnHandle) {
-        let room_id = format!("{}-{}", c.identity().identity(), cs.identity().identity());
+        let room_id = format!("{}-{}", c.identity().id(), cs.identity().id());
 
         let room_handle = RoomHandle::new(room_id.clone());
         self.rooms.insert(room_id, room_handle.clone());
@@ -88,20 +85,11 @@ impl Manager {
     /// if no customer service online, add customer to waiting queue.
     async fn dispatch(&mut self, customer: ConnHandle) {
         if customer.identity().is_customer_service() {
-            println!(
-                "customer service not support dispatch: {:?}",
-                customer.identity()
-            );
             return;
         }
 
         if self.customer_services.is_empty() {
-            println!("no customer service online. conn prepare to waiting queue.");
-
-            if let Err(err) = self.sender_waiting_queue.send(customer).await {
-                println!("send to waiting queue error: {:?}", err);
-            }
-
+            self.waiting_queue.push_back(customer);
             return;
         }
 
@@ -115,11 +103,8 @@ impl Manager {
             return;
         }
 
-        match self.waiting_queue.try_recv() {
-            Ok(customer) => {
-                self.dispatch(customer).await;
-            }
-            Err(err) => println!("try recv waiting queue error: {:?}", err),
+        if let Some(cs) = self.waiting_queue.pop_front() {
+            self.dispatch(cs).await;
         }
     }
 
@@ -146,10 +131,10 @@ async fn listener(mut dispatch: Manager) {
                 dispatch.auto_dispatch().await;
             }
 
-            Some(msg) = dispatch.receiver_from_session.recv() => {
-                dispatch.handle_message(msg).await;
+            Some(msg) = dispatch.mailbox_session.recv() => {
+                dispatch.handle_session_message(msg).await;
             }
-            Some(msg) = dispatch.receiver_from_conn.recv() => {
+            Some(msg) = dispatch.mailbox_conn.recv() => {
                 dispatch.handle_conn_message(msg).await;
             }
         }
@@ -158,39 +143,34 @@ async fn listener(mut dispatch: Manager) {
 
 #[derive(Debug, Clone)]
 pub struct DispatchHandle {
-    sender: mpsc::Sender<SessionMessage>,
-    sender_of_conn: mpsc::Sender<ConnMessage>,
+    sender_session: mpsc::Sender<SessionMessage>,
+    sender_conn: mpsc::Sender<ConnMessage>,
 }
 
 impl DispatchHandle {
     pub fn new() -> Self {
-        // tx is session message sender.
-        // rx is session message receiver.
-        let (tx, rx) = mpsc::channel(100);
+        let (sender_session, mailbox_session) = mpsc::channel(100);
+        let (sender_conn, mailbox_conn) = mpsc::channel(100);
 
-        // conn_tx is conn message sender.
-        // conn_rx is conn message receiver.
-        let (conn_tx, conn_rx) = mpsc::channel(100);
-
-        let dispatch = Manager::new(rx, conn_rx);
+        let dispatch = Manager::new(mailbox_session, mailbox_conn);
 
         tokio::spawn(listener(dispatch));
 
         DispatchHandle {
-            sender: tx,
-            sender_of_conn: conn_tx,
+            sender_session,
+            sender_conn,
         }
     }
 
     /// Session calls this method to send a message to Dispatch
     pub async fn send_message(&self, message: SessionMessage) {
-        if let Err(err) = self.sender.send(message).await {
+        if let Err(err) = self.sender_session.send(message).await {
             println!("send message error: {:?}", err);
         }
     }
 
     /// Conn calls this method to send a message to Dispatch
     pub async fn send_conn_message(&self, message: ConnMessage) {
-        let _ = self.sender_of_conn.send(message).await;
+        let _ = self.sender_conn.send(message).await;
     }
 }

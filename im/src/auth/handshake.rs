@@ -45,7 +45,7 @@ pub async fn handshake(stream: TcpStream) -> Result<ConnWrapper, ErrorResponse> 
 
         match decode_res {
             Ok(token_data) => {
-                user_id = token_data.claims.identity().to_string();
+                user_id = token_data.claims.id().to_string();
                 user_type = token_data.claims.user_type();
                 user_name = token_data.claims.user_name().to_string();
             }

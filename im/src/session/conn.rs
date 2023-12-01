@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use futures_util::{
     stream::{SplitSink, SplitStream, StreamExt},
     SinkExt,
@@ -31,6 +29,7 @@ pub struct Conn {
     /// receiver_from_room is a channel. it can receive message from room.
     receiver: mpsc::Receiver<RoomMessage>,
 
+    /// dispatch actor handle. use this to send message to dispatch.
     dispatch_handle: DispatchHandle,
 }
 
@@ -77,6 +76,10 @@ impl Conn {
                 member,
                 content,
             } => {
+                if member == self.id {
+                    return;
+                }
+
                 if let Err(err) = self.write.send(content).await {
                     println!("send message to client err: {:?}", err);
                 }
@@ -116,12 +119,17 @@ impl Conn {
     }
 }
 
+/// listener for conn actor.
 async fn listener(mut conn: Conn) {
     loop {
         tokio::select! {
+
+            // receive message from room.
             Some(msg) = conn.receiver.recv() => {
                 conn.handle_room_message(msg).await;
             }
+
+            // receive message from client.
             Some(msg) = conn.read.next() => {
                 match msg {
                     Ok(msg) => {
@@ -136,6 +144,7 @@ async fn listener(mut conn: Conn) {
     }
 }
 
+/// conn actor handle. use this to send message to conn.
 #[derive(Debug, Clone)]
 pub struct ConnHandle {
     id: Member,

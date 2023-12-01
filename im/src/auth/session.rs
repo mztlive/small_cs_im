@@ -35,7 +35,7 @@ impl Member {
         self.user_type
     }
 
-    pub fn identity(&self) -> &str {
+    pub fn id(&self) -> &str {
         &self.id
     }
 
