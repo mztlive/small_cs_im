@@ -27,26 +27,21 @@ pub struct Conn {
     read: SplitStream<WebSocketStream<TcpStream>>,
 
     /// receiver_from_room is a channel. it can receive message from room.
-    receiver: mpsc::Receiver<RoomMessage>,
+    mailbox: mpsc::Receiver<RoomMessage>,
 
     /// dispatch actor handle. use this to send message to dispatch.
     dispatch_handle: DispatchHandle,
 }
 
 impl Conn {
-    pub fn new(
-        id: Member,
-        stream: WebSocketStream<TcpStream>,
-        receiver: mpsc::Receiver<RoomMessage>,
-        dispatch_handle: DispatchHandle,
-    ) -> Self {
+    pub fn new(id: Member, stream: WebSocketStream<TcpStream>, mailbox: mpsc::Receiver<RoomMessage>, dispatch_handle: DispatchHandle) -> Self {
         let (write, read) = stream.split();
 
         Conn {
             id,
             write,
             read,
-            receiver,
+            mailbox,
             dispatch_handle,
         }
     }
@@ -57,25 +52,15 @@ impl Conn {
         match message {
             RoomMessage::OnJoin { room_id, member } => {
                 if member == self.id {
-                    let _ = self
-                        .write
-                        .send(protocol::self_join(room_id).to_message())
-                        .await;
+                    let _ = self.write.send(protocol::self_join(room_id).to_message()).await;
 
                     return;
                 }
 
-                let _ = self
-                    .write
-                    .send(protocol::join(member, room_id).to_message())
-                    .await;
+                let _ = self.write.send(protocol::join(member, room_id).to_message()).await;
             }
             RoomMessage::OnLeave { room_id, member } => todo!(),
-            RoomMessage::OnNewMessage {
-                room_id,
-                member,
-                content,
-            } => {
+            RoomMessage::OnNewMessage { room_id, member, content } => {
                 if member == self.id {
                     return;
                 }
@@ -108,9 +93,7 @@ impl Conn {
                     .await;
             }
             Message::Close(_) => {
-                let room_msg = ConnMessage::OnLeave {
-                    member: self.id.clone(),
-                };
+                let room_msg = ConnMessage::OnLeave { member: self.id.clone() };
 
                 self.dispatch_handle.send_conn_message(room_msg).await
             }
@@ -125,7 +108,7 @@ async fn listener(mut conn: Conn) {
         tokio::select! {
 
             // receive message from room.
-            Some(msg) = conn.receiver.recv() => {
+            Some(msg) = conn.mailbox.recv() => {
                 conn.handle_room_message(msg).await;
             }
 
@@ -152,11 +135,7 @@ pub struct ConnHandle {
 }
 
 impl ConnHandle {
-    pub fn new(
-        id: Member,
-        stream: WebSocketStream<TcpStream>,
-        dispatch_handle: DispatchHandle,
-    ) -> Self {
+    pub fn new(id: Member, stream: WebSocketStream<TcpStream>, dispatch_handle: DispatchHandle) -> Self {
         let (tx, rx) = mpsc::channel(100);
 
         let conn = Conn::new(id.clone(), stream, rx, dispatch_handle);
